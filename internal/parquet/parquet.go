@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/parquet-go/parquet-go"
@@ -37,47 +38,43 @@ func NewDynamicParquetDB(path string, fieldDefs []config.FieldDef) (*DynamicParq
 }
 
 func buildSchema(fieldDefs []config.FieldDef) *parquet.Schema {
-	// Column 0: image_path — exact same node as current code
-	nodes := []parquet.Node{
-		parquet.Encoded(
-			parquet.Compressed(parquet.String(), &parquet.Snappy),
-			&parquet.DeltaLengthByteArray,
-		),
-	}
-	for _, fd := range fieldDefs {
-		var node parquet.Node
-		switch fd.Type {
-		case "caption":
-			node = parquet.Encoded(
-				parquet.Compressed(parquet.String(), &parquet.Snappy),
-				&parquet.DeltaLengthByteArray,
-			)
-		case "free_text":
-			node = parquet.Optional(parquet.Encoded(
-				parquet.Compressed(parquet.String(), &parquet.Snappy),
-				&parquet.DeltaLengthByteArray,
-			))
-		case "timestamp":
-			node = parquet.Optional(parquet.Timestamp(parquet.Nanosecond))
-		case "modified_at":
-			node = parquet.Optional(parquet.Timestamp(parquet.Nanosecond))
-		case "number":
-			node = parquet.Optional(parquet.Leaf(parquet.DoubleType))
-		}
-		nodes = append(nodes, node)
-	}
+	// Use reflect.StructOf to create a deterministic, ordered schema.
+	// Struct fields are ordered, so the resulting Parquet columns will be too.
+	sfs := make([]reflect.StructField, 0, 1+len(fieldDefs))
+	
+	// Column 0: image_path (Required)
+	sfs = append(sfs, reflect.StructField{
+		Name: "ImagePath",
+		Type: reflect.TypeOf(""),
+		Tag:  `parquet:"image_path,snappy"`,
+	})
 
-	// Create a group node with ordered children. 
-	// Since parquet.Group is a map, we use it to define names, but the schema 
-	// order is determined by how we write the rows and how the reader interprets them.
-	// Actually, parquet.NewSchema takes a Node. A Group node IS a Node.
-	group := make(parquet.Group)
-	group["image_path"] = nodes[0]
 	for i, fd := range fieldDefs {
-		group[fd.FieldName] = nodes[i+1]
+		// Unique exported name for reflect
+		name := "F" + fmt.Sprint(i)
+		sf := reflect.StructField{
+			Name: name,
+		}
+		
+		tag := fd.FieldName
+		switch fd.Type {
+		case "caption", "free_text":
+			sf.Type = reflect.TypeOf("")
+			tag += ",snappy"
+		case "timestamp", "modified_at":
+			t := time.Now()
+			sf.Type = reflect.TypeOf(&t) // Pointer makes it Optional
+		case "number":
+			f := 0.0
+			sf.Type = reflect.TypeOf(&f) // Pointer makes it Optional
+		}
+		sf.Tag = reflect.StructTag(fmt.Sprintf(`parquet:"%s"`, tag))
+		sfs = append(sfs, sf)
 	}
 
-	return parquet.NewSchema("parq-vision", group)
+	typ := reflect.StructOf(sfs)
+	// Create a dummy instance to derive schema from
+	return parquet.SchemaOf(reflect.New(typ).Elem().Interface())
 }
 
 func (db *DynamicParquetDB) load() error {
@@ -116,6 +113,10 @@ func (db *DynamicParquetDB) load() error {
 		}
 		db.index[decoded["image_path"].(string)] = len(db.rows)
 		db.rows = append(db.rows, decoded)
+		
+		if err == io.EOF {
+			break
+		}
 	}
 	return nil
 }
@@ -184,6 +185,10 @@ func (db *DynamicParquetDB) GetRow(imagePath string) (map[string]any, bool) {
 }
 
 func (db *DynamicParquetDB) Close() error {
+	return db.Save()
+}
+
+func (db *DynamicParquetDB) Save() error {
 	tempPath := db.path + ".tmp"
 	file, err := os.Create(tempPath)
 	if err != nil {
@@ -198,6 +203,7 @@ func (db *DynamicParquetDB) Close() error {
 		colMap[col[0]] = i
 	}
 
+	rowsToWrite := make([]parquet.Row, 0, len(db.rows))
 	for _, r := range db.rows {
 		row := make(parquet.Row, len(colMap))
 		
@@ -212,11 +218,13 @@ func (db *DynamicParquetDB) Close() error {
 				row[idx] = fieldToValue(val, fd.Type, idx)
 			}
 		}
-		if _, err := w.WriteRows([]parquet.Row{row}); err != nil {
-			w.Close()
-			file.Close()
-			return err
-		}
+		rowsToWrite = append(rowsToWrite, row)
+	}
+
+	if _, err := w.WriteRows(rowsToWrite); err != nil {
+		w.Close()
+		file.Close()
+		return err
 	}
 
 	if err := w.Close(); err != nil {
