@@ -33,3 +33,5 @@ go.work.sum
 CLAUDE.md
 PLAN.md
 parq-vision
+*.parquet
+test*.json

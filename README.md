@@ -55,9 +55,13 @@ go install github.com/trithemius/parq-vision/cmd/parq-vision@latest
 
 | Flag | Default | Description |
 |---|---|---|
-| `-c`, `--config` | *(required)* | Path to `vision.json` |
-| `--resize` | `0` | Resize images to this many megapixels (e.g. `1.0`) in-memory before sending to LLM. Maintains aspect ratio. Never modifies original files. `0` disables resizing. |
-| `-h`, `--help` | — | Show usage information. |
+| `-c`, `-config` | *(required)* | Path to `vision.json` config file. |
+| `-r`, `-recursive` | `false` | Scan for images recursively in subdirectories. Overrides config. |
+| `-b`, `-batch` | `0` | Save progress to the Parquet file every X images. `0` disables periodic saving. |
+| `-o`, `-override` | `false` | Force re-processing of images already in the database (overrides config). |
+| `-stop` | `0` | Stop processing after X images. `0` disables (process all). |
+| `-resize` | `0` | Resize images to target Megapixels (e.g. `1.0`) in-memory. Maintains aspect ratio. `0` disables resizing. |
+| `-h`, `-help` | — | Show usage information. |
 
 ## Configuration Reference (`vision.json`)
 
@@ -65,7 +69,7 @@ go install github.com/trithemius/parq-vision/cmd/parq-vision@latest
 | Key | Type | Description |
 |---|---|---|
 | `base_url` | string | OpenAI-compatible API base URL. Supports `${ENV_VAR}`. |
-| `api_key` | string | API key. Supports `${ENV_VAR}`. |
+| `api_key` | string | API key. Supports `${ENV_VAR}`. (Optional for some local endpoints). |
 | `model` | string | Model name (default: `"gpt-4o"`). |
 
 ### `images` (Mandatory)
