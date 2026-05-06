@@ -32,6 +32,11 @@ go.work.sum
 .vscode/
 CLAUDE.md
 PLAN.md
-parq-vision
+
+# Built binary (not the directory)
+# parq-vision
 *.parquet
 test*.json
+
+# Output directory
+out/
