@@ -1,0 +1,12 @@
+products:
+  parq-vision:
+    build:
+      main-pkg: ./cmd/parq-vision
+      output-dir: out/build
+      os-archs:
+        - os: linux
+          arch: amd64
+        - os: linux
+          arch: arm64
+        - os: darwin
+          arch: arm64

@@ -1,0 +1,40 @@
+{
+  "llm": {
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "${OPENAI_API_KEY}",
+    "model": "gpt-4o"
+  },
+  "prompt": "describe the image in detail",
+  "images": {
+    "source": "./images",
+    "recursive": true,
+    "extensions": [".png", ".jpg", ".jpeg", ".webp"]
+  },
+  "database": {
+    "path": "./output.parquet",
+    "override": false
+  },
+  "fields": [
+    {
+      "field_name": "caption",
+      "type": "caption"
+    },
+    {
+      "field_name": "created_at",
+      "type": "timestamp",
+      "default": "current_timestamp"
+    },
+    {
+      "field_name": "notes",
+      "type": "free_text"
+    },
+    {
+      "field_name": "score",
+      "type": "number"
+    },
+    {
+      "field_name": "modified_at",
+      "type": "modified_at"
+    }
+  ]
+}
