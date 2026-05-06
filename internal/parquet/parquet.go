@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/parquet-go/parquet-go"
@@ -12,14 +13,14 @@ import (
 )
 
 type DynamicParquetDB struct {
+	mu        sync.Mutex
 	path      string
 	schema    *parquet.Schema
 	fieldDefs []config.FieldDef
 	rows      []map[string]any
 	index     map[string]int
+	savedUpto int
 	
-	// isReady is only true if we successfully loaded ALL existing data 
-	// or if we are starting a fresh file.
 	isReady   bool
 }
 
@@ -152,6 +153,9 @@ func valueToField(v parquet.Value, fieldType string) any {
 }
 
 func (db *DynamicParquetDB) AppendRows(newRows []map[string]any, override bool) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	if !db.isReady {
 		return fmt.Errorf("database protection active: initial load failed")
 	}
@@ -185,6 +189,18 @@ func (db *DynamicParquetDB) AppendRows(newRows []map[string]any, override bool) 
 	return nil
 }
 
+func (db *DynamicParquetDB) CountSinceLastSave() int {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return len(db.rows) - db.savedUpto
+}
+
+func (db *DynamicParquetDB) MarkSaved() {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.savedUpto = len(db.rows)
+}
+
 func (db *DynamicParquetDB) Exists(imagePath string) bool {
 	_, ok := db.index[imagePath]
 	return ok
@@ -199,10 +215,28 @@ func (db *DynamicParquetDB) GetRow(imagePath string) (map[string]any, bool) {
 }
 
 func (db *DynamicParquetDB) Close() error {
-	return db.Save()
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.saveLocked()
 }
 
 func (db *DynamicParquetDB) Save() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.saveLocked()
+}
+
+func (db *DynamicParquetDB) SaveIfDirty(threshold int) (bool, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if len(db.rows)-db.savedUpto < threshold {
+		return false, nil
+	}
+	err := db.saveLocked()
+	return err == nil, err
+}
+
+func (db *DynamicParquetDB) saveLocked() error {
 	if !db.isReady {
 		return fmt.Errorf("refusing to save: data integrity not guaranteed")
 	}

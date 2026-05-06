@@ -16,9 +16,10 @@ type VisionConfig struct {
 }
 
 type LLMConfig struct {
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
-	Model   string `json:"model"`
+	BaseURL     string `json:"base_url"`
+	APIKey      string `json:"api_key"`
+	Model       string `json:"model"`
+	Concurrency int    `json:"concurrency"`
 }
 
 type ImagesConfig struct {
@@ -62,6 +63,9 @@ func LoadConfig(path string) (*VisionConfig, error) {
 	}
 	if cfg.LLM.Model == "" {
 		cfg.LLM.Model = "gpt-4o"
+	}
+	if cfg.LLM.Concurrency <= 0 {
+		cfg.LLM.Concurrency = 1
 	}
 
 	if err := validateConfig(&cfg); err != nil {

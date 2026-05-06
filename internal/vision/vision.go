@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
 	_ "image/png"
 	"math"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,20 +90,36 @@ func (c *VisionClient) DescribeImage(imagePath string, prompt string, maxPixels 
 		},
 	}
 
-	// Retry logic
 	var resp openai.ChatCompletionResponse
 	for i := 0; i < 3; i++ {
-		resp, err = c.client.CreateChatCompletion(context.Background(), msg)
+		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		resp, err = c.client.CreateChatCompletion(ctx, msg)
+		cancel()
 		if err == nil {
 			return resp.Choices[0].Message.Content, nil
 		}
-		
+
+		if !isRetryableError(err) {
+			return "", fmt.Errorf("API call failed (non-retryable): %w", err)
+		}
+
 		if i < 2 {
-			time.Sleep(time.Duration(math.Pow(2, float64(i))) * time.Second)
+			backoff := time.Duration(math.Pow(2, float64(i))) * time.Second
+			jitter := time.Duration(rand.Int64N(int64(500))) * time.Millisecond
+			time.Sleep(backoff + jitter)
 		}
 	}
 
 	return "", fmt.Errorf("API call failed after retries: %w", err)
+}
+
+func isRetryableError(err error) bool {
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) {
+		code := apiErr.HTTPStatusCode
+		return code == 429 || code >= 500
+	}
+	return true
 }
 
 func resizeImageIfNeeded(data []byte, mimeType string, maxPixels int) ([]byte, string, error) {
