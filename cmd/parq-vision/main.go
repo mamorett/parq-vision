@@ -10,10 +10,10 @@ import (
 	"time"
 
 	"github.com/schollz/progressbar/v3"
-	"github.com/trithemius/parq-vision/internal/collector"
-	"github.com/trithemius/parq-vision/internal/config"
-	"github.com/trithemius/parq-vision/internal/parquet"
-	"github.com/trithemius/parq-vision/internal/vision"
+	"github.com/mamorett/parq-vision/internal/collector"
+	"github.com/mamorett/parq-vision/internal/config"
+	"github.com/mamorett/parq-vision/internal/parquet"
+	"github.com/mamorett/parq-vision/internal/vision"
 )
 
 func main() {

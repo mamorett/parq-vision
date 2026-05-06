@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/trithemius/parq-vision/internal/config"
+	"github.com/mamorett/parq-vision/internal/config"
 )
 
 func TestDynamicParquetDB(t *testing.T) {

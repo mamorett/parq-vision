@@ -1,6 +1,6 @@
 # 🎨 parq-vision
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/trithemius/parq-vision)](https://github.com/trithemius/parq-vision)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/mamorett/parq-vision)](https://github.com/mamorett/parq-vision)
 
 `parq-vision` is a config-driven tool for generating high-quality image captions using Vision LLMs and storing them in an efficient Parquet database. It replaces the old ComfyUI/A1111 metadata extraction pipeline with a modern, LLM-powered vision system.
 
@@ -15,7 +15,7 @@ Instead of relying on fragile metadata from specific generation tools, `parq-vis
 
 ### From Source
 ```bash
-go install github.com/trithemius/parq-vision/cmd/parq-vision@latest
+go install github.com/mamorett/parq-vision/cmd/parq-vision@latest
 ```
 
 ## Quick Start

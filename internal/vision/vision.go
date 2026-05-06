@@ -17,7 +17,7 @@ import (
 	"github.com/sashabaranov/go-openai"
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
-	"github.com/trithemius/parq-vision/internal/config"
+	"github.com/mamorett/parq-vision/internal/config"
 )
 
 type VisionClient struct {

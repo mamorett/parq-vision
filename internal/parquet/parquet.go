@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/parquet-go/parquet-go"
-	"github.com/trithemius/parq-vision/internal/config"
+	"github.com/mamorett/parq-vision/internal/config"
 )
 
 type DynamicParquetDB struct {

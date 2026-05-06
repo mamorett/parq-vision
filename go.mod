@@ -1,4 +1,4 @@
-module github.com/trithemius/parq-vision
+module github.com/mamorett/parq-vision
 
 go 1.24.9
 

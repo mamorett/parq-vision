@@ -14,10 +14,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/trithemius/parq-vision/internal/collector"
-	"github.com/trithemius/parq-vision/internal/config"
-	"github.com/trithemius/parq-vision/internal/parquet"
-	"github.com/trithemius/parq-vision/internal/vision"
+	"github.com/mamorett/parq-vision/internal/collector"
+	"github.com/mamorett/parq-vision/internal/config"
+	"github.com/mamorett/parq-vision/internal/parquet"
+	"github.com/mamorett/parq-vision/internal/vision"
 )
 
 func TestFullPipeline(t *testing.T) {
