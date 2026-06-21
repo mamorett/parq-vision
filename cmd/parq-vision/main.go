@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
-	"github.com/schollz/progressbar/v3"
 	"github.com/mamorett/parq-vision/internal/collector"
 	"github.com/mamorett/parq-vision/internal/config"
 	"github.com/mamorett/parq-vision/internal/parquet"
+	"github.com/mamorett/parq-vision/internal/progress"
 	"github.com/mamorett/parq-vision/internal/vision"
 )
 
@@ -21,6 +23,16 @@ type result struct {
 	imagePath string
 	caption   string
 	err       error
+}
+
+var rawAsciiArt = `  ____   _    ____   ___   __     _____ ____ ___ ___  _   _ 
+ |  _ \ / \  |  _ \ / _ \  \ \   / /_ _/ ___|_ _/ _ \| \ | |
+ | |_) / _ \ | |_) | | | |  \ \ / / | |\___ \| | | | |  \| |
+ |  __/ ___ \|  _ <| |_| |   \ V /  | | ___) | | |_| | |\  |
+ |_| /_/   \_\_| \_\\__\_\    \_/  |___|____/___\___/|_| \_|`
+
+func printLogo() {
+	fmt.Printf("\033[36m%s\033[0m\n\n", rawAsciiArt)
 }
 
 func main() {
@@ -39,27 +51,33 @@ func main() {
 	flag.IntVar(concurrency, "j", 0, "Alias for -concurrency")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: parq-vision [options]\n\nOptions:\n")
-		fmt.Fprintf(os.Stderr, "  -c, -config string\n        Path to vision.json config file (required)\n")
-		fmt.Fprintf(os.Stderr, "  -j, -concurrency int\n        Number of parallel LLM workers (default from config or 1)\n")
-		fmt.Fprintf(os.Stderr, "  -r, -recursive\n        Scan for images recursively (default false)\n")
-		fmt.Fprintf(os.Stderr, "  -b, -batch int\n        Save progress every X images (default 0)\n")
-		fmt.Fprintf(os.Stderr, "  -o, -override\n        Override idempotency; re-process and update existing entries (default false)\n")
-		fmt.Fprintf(os.Stderr, "  -stop int\n        Stop processing after X images (default 0, processes all)\n")
-		fmt.Fprintf(os.Stderr, "  -resize float\n        Resize images to target Megapixels (e.g. 1.0) in-memory. 0 disables. (default 0)\n")
-		fmt.Fprintf(os.Stderr, "  -h, -help\n        Show this help message\n")
+		printLogo()
+		fmt.Fprintf(os.Stderr, "\033[1;36mUsage of parq-vision:\033[0m\n\n")
+		fmt.Fprintf(os.Stderr, "\033[1mOptions:\033[0m\n")
+		fmt.Fprintf(os.Stderr, "  \033[36m-c, --config\033[0m \033[33m<path>\033[0m        Path to vision.json config file (\033[1;31mrequired\033[0m)\n")
+		fmt.Fprintf(os.Stderr, "  \033[36m-j, --concurrency\033[0m \033[33m<int>\033[0m     Number of parallel LLM workers (overrides config)\n")
+		fmt.Fprintf(os.Stderr, "  \033[36m-r, --recursive\033[0m             Scan for images recursively (default false)\n")
+		fmt.Fprintf(os.Stderr, "  \033[36m-b, --batch\033[0m \033[33m<int>\033[0m           Save progress every X images (default 0, disables periodic saving)\n")
+		fmt.Fprintf(os.Stderr, "  \033[36m-o, --override\033[0m              Force re-processing of images already in database\n")
+		fmt.Fprintf(os.Stderr, "  \033[36m--stop\033[0m \033[33m<int>\033[0m                Stop processing after X images (default 0)\n")
+		fmt.Fprintf(os.Stderr, "  \033[36m--resize\033[0m \033[33m<float>\033[0m            Resize images to target Megapixels in-memory (0 disables)\n")
+		fmt.Fprintf(os.Stderr, "  \033[36m-h, --help\033[0m                  Show this help message\n\n")
+		fmt.Fprintf(os.Stderr, "\033[1mExamples:\033[0m\n")
+		fmt.Fprintf(os.Stderr, "  \033[90mparq-vision -c vision.json\033[0m\n")
+		fmt.Fprintf(os.Stderr, "  \033[90mparq-vision -c vision.json -j 4 --override\033[0m\n")
 	}
 
 	flag.Parse()
 
 	if configPath == "" {
+		fmt.Println("\033[31m✗ Error: -config is required\033[0m")
 		flag.Usage()
 		os.Exit(1)
 	}
 
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		fmt.Printf("\033[31m✗ Error loading config:\033[0m %v\n", err)
 		os.Exit(1)
 	}
 
@@ -86,28 +104,24 @@ func main() {
 		cfg.Images.FileList,
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error collecting images: %v\n", err)
+		fmt.Printf("\033[31m✗ Error collecting images:\033[0m %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("Found %d images\n", len(imagePaths))
 
 	// 2. Open/Create Parquet DB
 	db, err := parquet.NewDynamicParquetDB(cfg.Database.Path, cfg.Fields)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening database: %v\n", err)
+		fmt.Printf("\033[31m✗ Error opening database:\033[0m %v\n", err)
 		os.Exit(1)
 	}
 
 	// 3. Filter images (if not override)
 	var toProcess []string
+	var skippedCount int
 	finalOverride := cfg.Database.Override || *override
 	if finalOverride {
 		toProcess = imagePaths
-		if *override {
-			fmt.Println("Override mode enabled: all images will be re-processed.")
-		}
 	} else {
-		skippedCount := 0
 		for _, p := range imagePaths {
 			if !db.Exists(p) {
 				toProcess = append(toProcess, p)
@@ -115,21 +129,11 @@ func main() {
 				skippedCount++
 			}
 		}
-		if skippedCount > 0 {
-			fmt.Printf("Idempotency check: skipped %d images already present in database.\n", skippedCount)
-		}
-	}
-
-	if len(toProcess) == 0 {
-		fmt.Println("No new images to process.")
-		return
 	}
 
 	if *stopAfter > 0 && *stopAfter < len(toProcess) {
 		toProcess = toProcess[:*stopAfter]
 	}
-
-	fmt.Printf("Processing %d images with %d worker(s)...\n", len(toProcess), finalConcurrency)
 
 	// 4. Initialize Vision Client
 	client := vision.NewVisionClient(cfg.LLM)
@@ -137,32 +141,52 @@ func main() {
 	maxPixels := 0
 	if *resizeMP > 0 {
 		maxPixels = int(*resizeMP * 1000000)
-		fmt.Printf("In-memory resizing enabled (target: %.2f MP).\n", *resizeMP)
 	}
 
+	// Print visual header
+	printLogo()
+	fmt.Printf("\033[1;36m🎨 parq-vision (Go)\033[0m\n")
+	fmt.Printf("\033[90mConfig:\033[0m %s\n", configPath)
+	fmt.Printf("\033[90mConcurrency:\033[0m %d\n", finalConcurrency)
+	fmt.Printf("\033[90mRecursive:\033[0m %v\n", finalRecursive)
+	fmt.Printf("\033[90mBatch size:\033[0m %d\n", *batchSize)
+	fmt.Printf("\033[90mOverride enabled:\033[0m %v\n", finalOverride)
+	if *stopAfter > 0 {
+		fmt.Printf("\033[90mStop after:\033[0m %d images\n", *stopAfter)
+	}
+	if *resizeMP > 0 {
+		fmt.Printf("\033[90mIn-memory resizing:\033[0m %.2f MP\n", *resizeMP)
+	}
+	fmt.Println("\n💡 \033[33mTip:\033[0m Press \033[1;33mCtrl-C\033[0m anytime to save progress and exit gracefully")
+	fmt.Println("\033[90m" + strings.Repeat("-", 60) + "\033[0m")
+
+	fmt.Printf("Found %d image(s) total\n", len(imagePaths))
+	if skippedCount > 0 {
+		fmt.Printf("Skipping %d image(s) already in database\n", skippedCount)
+	}
+
+	if len(toProcess) == 0 {
+		fmt.Println("\n✓ No images to process. All images already exist in database.")
+		db.Close()
+		return
+	}
+
+	fmt.Printf("Processing %d image(s)\n\n", len(toProcess))
+
 	// 5. Progress bar
-	bar := progressbar.NewOptions(len(toProcess),
-		progressbar.OptionSetDescription("Processing images"),
-		progressbar.OptionShowCount(),
-		progressbar.OptionShowIts(),
-		progressbar.OptionSetPredictTime(true),
-		progressbar.OptionSetTheme(progressbar.Theme{
-			Saucer:        "=",
-			SaucerHead:    ">",
-			SaucerPadding: " ",
-			BarStart:      "[",
-			BarEnd:        "]",
-		}),
-	)
+	bar := progress.NewProgressBar(len(toProcess), "Processing images")
 
 	// 6. Signal handling
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
+	var successCount int64
+	var errorCount int64
+
 	stopChan := make(chan struct{})
 	go func() {
 		<-sigChan
-		fmt.Println("\nInterrupt received, saving progress and exiting...")
+		fmt.Println("\n\n⚠ Interrupt received (Ctrl-C). Saving progress...")
 		close(stopChan)
 	}()
 
@@ -181,6 +205,9 @@ func main() {
 					return
 				default:
 				}
+
+				baseName := filepath.Base(imgPath)
+				bar.Describe("Processing " + baseName)
 
 				caption, err := client.DescribeImage(imgPath, cfg.Prompt, maxPixels)
 				results <- result{imagePath: imgPath, caption: caption, err: err}
@@ -210,11 +237,11 @@ func main() {
 		close(results)
 	}()
 
-	var processedCount int64
 	for res := range results {
+		baseName := filepath.Base(res.imagePath)
 		if res.err != nil {
-			fmt.Fprintf(os.Stderr, "\nError processing %s: %v\n", res.imagePath, res.err)
-			bar.Add(1)
+			atomic.AddInt64(&errorCount, 1)
+			bar.UpdateWithStatus(fmt.Sprintf("✗ %s: %v", baseName, res.err))
 			continue
 		}
 
@@ -237,25 +264,40 @@ func main() {
 		}
 
 		if err := db.AppendRows([]map[string]any{row}, finalOverride); err != nil {
-			fmt.Fprintf(os.Stderr, "\nError saving row for %s: %v\n", res.imagePath, err)
+			atomic.AddInt64(&errorCount, 1)
+			bar.UpdateWithStatus(fmt.Sprintf("✗ Error saving row for %s: %v", baseName, err))
+			continue
 		}
 
-		count := int(atomic.AddInt64(&processedCount, 1))
-		bar.Add(1)
+		count := int(atomic.AddInt64(&successCount, 1))
+		bar.IncrementWithStatus(fmt.Sprintf("✓ %s", baseName))
 
 		if *batchSize > 0 && count%*batchSize == 0 {
 			if err := db.Save(); err != nil {
-				fmt.Fprintf(os.Stderr, "\nError during batch save: %v\n", err)
+				bar.UpdateWithStatus(fmt.Sprintf("✗ Error during batch save: %v", err))
 			} else {
-				fmt.Printf("\nBatch save: progress persisted to database after %d images.\n", count)
+				bar.UpdateWithStatus(fmt.Sprintf("✓ Batch save: progress persisted after %d images", count))
 			}
 		}
 	}
 
-	fmt.Println("\nSaving database...")
+	bar.Finish()
+
+	fmt.Println("Saving results to database...")
 	if err := db.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error closing database: %v\n", err)
+		fmt.Printf("\033[31m✗ Error closing database:\033[0m %v\n", err)
 		os.Exit(1)
+	} else {
+		fmt.Printf("\033[32m✓ Database updated:\033[0m %s\n", cfg.Database.Path)
 	}
-	fmt.Printf("Done. Processed %d images.\n", atomic.LoadInt64(&processedCount))
+
+	fmt.Println("\033[90m" + strings.Repeat("-", 60) + "\033[0m")
+	fmt.Println("\033[1;36mProcessing complete!\033[0m")
+	fmt.Printf("\033[32m✓ Successfully processed:\033[0m %d\n", successCount)
+	if errorCount > 0 {
+		fmt.Printf("\033[31m✗ Errors:\033[0m %d\n", errorCount)
+	}
+	if skippedCount > 0 {
+		fmt.Printf("\033[90m⊘ Skipped (already in database):\033[0m %d\n", skippedCount)
+	}
 }
