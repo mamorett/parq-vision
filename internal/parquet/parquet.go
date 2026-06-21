@@ -63,7 +63,7 @@ func buildSchema(fieldDefs []config.FieldDef) *parquet.Schema {
 		
 		tag := fd.FieldName
 		switch fd.Type {
-		case "caption":
+		case "caption", "prompt":
 			sf.Type = reflect.TypeOf("")
 			tag += ",snappy,deltalengthbytearray"
 		case "free_text":
@@ -141,7 +141,7 @@ func valueToField(v parquet.Value, fieldType string) any {
 		return nil
 	}
 	switch fieldType {
-	case "caption", "free_text":
+	case "caption", "free_text", "prompt":
 		return string(v.ByteArray())
 	case "timestamp", "modified_at":
 		return time.Unix(0, v.Int64()).UTC()
@@ -322,7 +322,7 @@ func fieldToValue(val any, fieldType string, columnIndex int) parquet.Value {
 		pv = parquet.ValueOf(nil)
 	} else {
 		switch fieldType {
-		case "caption":
+		case "caption", "prompt":
 			pv = parquet.ValueOf(val.(string))
 			dl = 0
 		case "free_text":

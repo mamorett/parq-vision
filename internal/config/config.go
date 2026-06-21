@@ -36,7 +36,7 @@ type DatabaseConfig struct {
 
 type FieldDef struct {
 	FieldName string `json:"field_name"`
-	Type      string `json:"type"`    // "caption", "timestamp", "free_text", "modified_at", "number"
+	Type      string `json:"type"`    // "caption", "timestamp", "free_text", "modified_at", "number", "prompt"
 	Default   string `json:"default"` // "current_timestamp" (only valid for "timestamp" type)
 }
 
@@ -120,7 +120,7 @@ func validateConfig(cfg *VisionConfig) error {
 			if f.Default != "" && f.Default != "current_timestamp" {
 				return fmt.Errorf("invalid default %q for timestamp field %q", f.Default, f.FieldName)
 			}
-		case "free_text", "modified_at", "number":
+		case "free_text", "modified_at", "number", "prompt":
 			if f.Default != "" {
 				return fmt.Errorf("field %q of type %q does not support defaults", f.FieldName, f.Type)
 			}

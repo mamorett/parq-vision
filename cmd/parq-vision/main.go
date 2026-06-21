@@ -274,6 +274,8 @@ func main() {
 			switch f.Type {
 			case "caption":
 				row[f.FieldName] = res.caption
+			case "prompt":
+				row[f.FieldName] = cfg.Prompt
 			case "timestamp":
 				if f.Default == "current_timestamp" {
 					row[f.FieldName] = time.Now().UTC()
