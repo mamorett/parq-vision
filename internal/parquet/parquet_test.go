@@ -131,3 +131,36 @@ func TestParquetStressLarge(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, n, len(db2.rows))
 }
+
+func TestInspect(t *testing.T) {
+	tempDir := t.TempDir()
+	tempFile := tempDir + "/test_inspect.parquet"
+
+	fieldDefs := []config.FieldDef{
+		{FieldName: "caption", Type: "caption"},
+		{FieldName: "created_at", Type: "timestamp"},
+		{FieldName: "score", Type: "number"},
+	}
+
+	db, err := NewDynamicParquetDB(tempFile, fieldDefs)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	rows := []map[string]any{
+		{
+			"image_path": "test_img.png",
+			"caption":    "inspect test caption",
+			"created_at": now,
+			"score":      0.88,
+		},
+	}
+
+	err = db.AppendRows(rows, false)
+	require.NoError(t, err)
+	err = db.Close()
+	require.NoError(t, err)
+
+	// Test Inspect output
+	err = Inspect(tempFile)
+	assert.NoError(t, err)
+}

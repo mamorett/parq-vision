@@ -96,10 +96,9 @@ go install github.com/palantir/godel/v2/godelinit@latest
    ```bash
    parq-vision -c vision.json
    ```
-3. Inspect your results:
+3. Inspect your results natively:
    ```bash
-   # Using python/pandas
-   python -c "import pandas as pd; print(pd.read_parquet('dataset.parquet'))"
+   parq-vision --inspect dataset.parquet
    ```
 
 ---
@@ -115,6 +114,7 @@ go install github.com/palantir/godel/v2/godelinit@latest
 | `-o`, `-override` | `-o` | Force re-processing of images already in the database (overrides config). |
 | `-stop` | | Stop processing after X images. `0` disables (process all). |
 | `-resize` | | Resize images to target Megapixels (e.g. `1.0`) in-memory. Maintains aspect ratio. `0` disables resizing. |
+| `--inspect` | | Path to a Parquet database file to inspect/print natively. |
 | `-h`, `-help` | | Show usage information. |
 
 ---

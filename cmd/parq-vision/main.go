@@ -49,6 +49,7 @@ func main() {
 	stopAfter := flag.Int("stop", 0, "Stop processing after X images. 0 disables (process all).")
 	concurrency := flag.Int("concurrency", 0, "Number of parallel LLM workers (overrides config, default from config or 1)")
 	flag.IntVar(concurrency, "j", 0, "Alias for -concurrency")
+	inspectPath := flag.String("inspect", "", "Path to a Parquet database file to inspect natively")
 
 	flag.Usage = func() {
 		printLogo()
@@ -61,13 +62,23 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  \033[36m-o, --override\033[0m              Force re-processing of images already in database\n")
 		fmt.Fprintf(os.Stderr, "  \033[36m--stop\033[0m \033[33m<int>\033[0m                Stop processing after X images (default 0)\n")
 		fmt.Fprintf(os.Stderr, "  \033[36m--resize\033[0m \033[33m<float>\033[0m            Resize images to target Megapixels in-memory (0 disables)\n")
+		fmt.Fprintf(os.Stderr, "  \033[36m--inspect\033[0m \033[33m<path>\033[0m           Path to a Parquet database file to inspect natively\n")
 		fmt.Fprintf(os.Stderr, "  \033[36m-h, --help\033[0m                  Show this help message\n\n")
 		fmt.Fprintf(os.Stderr, "\033[1mExamples:\033[0m\n")
 		fmt.Fprintf(os.Stderr, "  \033[90mparq-vision -c vision.json\033[0m\n")
 		fmt.Fprintf(os.Stderr, "  \033[90mparq-vision -c vision.json -j 4 --override\033[0m\n")
+		fmt.Fprintf(os.Stderr, "  \033[90mparq-vision --inspect output.parquet\033[0m\n")
 	}
 
 	flag.Parse()
+
+	if *inspectPath != "" {
+		if err := parquet.Inspect(*inspectPath); err != nil {
+			fmt.Printf("\033[31m✗ Error inspecting database:\033[0m %v\n", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 
 	if configPath == "" {
 		fmt.Println("\033[31m✗ Error: -config is required\033[0m")

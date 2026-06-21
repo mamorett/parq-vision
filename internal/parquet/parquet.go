@@ -338,3 +338,97 @@ func fieldToValue(val any, fieldType string, columnIndex int) parquet.Value {
 	}
 	return pv.Level(0, dl, columnIndex)
 }
+
+// Inspect reads a Parquet file and prints its contents to stdout.
+func Inspect(dbPath string) error {
+	file, err := os.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	pf, err := parquet.OpenFile(file, stat.Size())
+	if err != nil {
+		return err
+	}
+
+	schema := pf.Schema()
+	fields := schema.Fields()
+
+	var headers []string
+	for _, f := range fields {
+		headers = append(headers, f.Name())
+	}
+	fmt.Printf("\033[1;36mDatabase Schema:\033[0m\n")
+	for _, f := range fields {
+		fmt.Printf("  - \033[33m%s\033[0m: %s\n", f.Name(), f.Type())
+	}
+	fmt.Println()
+
+	fmt.Printf("\033[1;36mRows:\033[0m\n")
+
+	// Create reader
+	r := parquet.NewReader(file, schema)
+	defer r.Close()
+
+	count := 0
+	for {
+		rows := make([]parquet.Row, 1)
+		n, err := r.ReadRows(rows)
+		if n == 0 {
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+
+		row := rows[0]
+		count++
+		fmt.Printf("\033[90m[%d]\033[0m\n", count)
+		for i, val := range row {
+			if i >= len(headers) {
+				continue
+			}
+			colName := headers[i]
+			var valStr string
+			if val.IsNull() {
+				valStr = "\033[90mNULL\033[0m"
+			} else {
+				kind := val.Kind()
+				switch kind {
+				case parquet.ByteArray, parquet.FixedLenByteArray:
+					valStr = string(val.ByteArray())
+				case parquet.Int64:
+					if colName == "created_at" || colName == "modified_at" {
+						valStr = time.Unix(0, val.Int64()).UTC().Format(time.RFC3339)
+					} else {
+						valStr = fmt.Sprintf("%d", val.Int64())
+					}
+				case parquet.Int32:
+					valStr = fmt.Sprintf("%d", val.Int32())
+				case parquet.Double:
+					valStr = fmt.Sprintf("%f", val.Double())
+				case parquet.Float:
+					valStr = fmt.Sprintf("%f", val.Float())
+				case parquet.Boolean:
+					valStr = fmt.Sprintf("%t", val.Boolean())
+				default:
+					valStr = val.String()
+				}
+			}
+			fmt.Printf("  \033[36m%s\033[0m: %s\n", colName, valStr)
+		}
+		fmt.Println()
+
+		if err == io.EOF {
+			break
+		}
+	}
+	fmt.Printf("\033[32mTotal rows: %d\033[0m\n", count)
+	return nil
+}
