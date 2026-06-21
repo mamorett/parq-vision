@@ -72,24 +72,25 @@ go install github.com/palantir/godel/v2/godelinit@latest
 
 1. Create a `vision.json` configuration file:
    ```json
-   {
-     "llm": {
-       "base_url": "https://api.openai.com/v1",
-       "api_key": "${OPENAI_API_KEY}",
-       "model": "gpt-4o"
-     },
-     "images": {
-       "source": "./my_images",
-       "recursive": true
-     },
-     "database": {
-       "path": "./dataset.parquet"
-     },
-     "fields": [
-       { "field_name": "caption", "type": "caption" },
-       { "field_name": "created_at", "type": "timestamp", "default": "current_timestamp" }
-     ]
-   }
+    {
+      "llm": {
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "${OPENAI_API_KEY}",
+        "model": "gpt-4o"
+      },
+      "prompt": "describe the image in detail",
+      "images": {
+        "source": "./my_images",
+        "recursive": true
+      },
+      "database": {
+        "path": "./dataset.parquet"
+      },
+      "fields": [
+        { "field_name": "caption", "type": "caption" },
+        { "field_name": "created_at", "type": "timestamp", "default": "current_timestamp" }
+      ]
+    }
    ```
 2. Run the tool:
    ```bash
@@ -119,6 +120,13 @@ go install github.com/palantir/godel/v2/godelinit@latest
 ---
 
 ## Configuration Reference (`vision.json`)
+
+### `prompt` (Optional)
+The prompt sent to the Vision LLM to guide caption generation.
+
+| Key | Type | Description |
+|---|---|---|
+| `prompt` | string | The instruction for the vision model (default: `"describe the image in detail"`). Supports environment variable substitution (e.g. `${VISION_PROMPT}`). |
 
 ### `llm` (Mandatory)
 | Key | Type | Description |
