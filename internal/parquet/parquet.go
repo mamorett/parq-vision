@@ -432,3 +432,31 @@ func Inspect(dbPath string) error {
 	fmt.Printf("\033[32mTotal rows: %d\033[0m\n", count)
 	return nil
 }
+
+// InspectSchema reads a Parquet file's metadata and prints its schema to stdout.
+func InspectSchema(dbPath string) error {
+	file, err := os.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	pf, err := parquet.OpenFile(file, stat.Size())
+	if err != nil {
+		return err
+	}
+
+	schema := pf.Schema()
+	fields := schema.Fields()
+
+	fmt.Printf("\033[1;36mDatabase Schema for %s:\033[0m\n", dbPath)
+	for _, f := range fields {
+		fmt.Printf("  - \033[33m%s\033[0m: %s\n", f.Name(), f.Type())
+	}
+	return nil
+}

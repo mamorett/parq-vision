@@ -163,4 +163,8 @@ func TestInspect(t *testing.T) {
 	// Test Inspect output
 	err = Inspect(tempFile)
 	assert.NoError(t, err)
+
+	// Test InspectSchema output
+	err = InspectSchema(tempFile)
+	assert.NoError(t, err)
 }
