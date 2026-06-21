@@ -100,6 +100,7 @@ func validateConfig(cfg *VisionConfig) error {
 	hasCaption := false
 	seenFields := make(map[string]bool)
 	seenFields["image_path"] = true // reserved
+	seenFields["id"] = true         // reserved
 
 	for _, f := range cfg.Fields {
 		if f.FieldName == "" {

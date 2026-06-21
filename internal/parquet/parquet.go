@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/parquet-go/parquet-go"
 	"github.com/mamorett/parq-vision/internal/config"
 )
@@ -49,7 +50,14 @@ func NewDynamicParquetDB(path string, fieldDefs []config.FieldDef) (*DynamicParq
 func buildSchema(fieldDefs []config.FieldDef) *parquet.Schema {
 	sfs := make([]reflect.StructField, 0, 1+len(fieldDefs))
 	
-	// Column 0: image_path (Required, Snappy, DeltaLengthByteArray)
+	// Column 0: id (Required, Snappy, DeltaLengthByteArray)
+	sfs = append(sfs, reflect.StructField{
+		Name: "ID",
+		Type: reflect.TypeOf(""),
+		Tag:  `parquet:"id,snappy,deltalengthbytearray"`,
+	})
+	
+	// Column 1: image_path (Required, Snappy, DeltaLengthByteArray)
 	sfs = append(sfs, reflect.StructField{
 		Name: "ImagePath",
 		Type: reflect.TypeOf(""),
@@ -110,6 +118,18 @@ func (db *DynamicParquetDB) load() error {
 		row := rows[0]
 		decoded := make(map[string]any)
 		
+		var recID string
+		if idx, ok := colMap["id"]; ok {
+			val := row[idx]
+			if !val.IsNull() {
+				recID = string(val.ByteArray())
+			}
+		}
+		if recID == "" {
+			recID = uuid.NewString()
+		}
+		decoded["id"] = recID
+
 		if idx, ok := colMap["image_path"]; ok {
 			val := row[idx]
 			if !val.IsNull() {
@@ -182,6 +202,9 @@ func (db *DynamicParquetDB) AppendRows(newRows []map[string]any, override bool) 
 				db.rows[idx] = existing
 			}
 		} else {
+			if _, hasID := row["id"]; !hasID {
+				row["id"] = uuid.NewString()
+			}
 			db.index[imagePath] = len(db.rows)
 			db.rows = append(db.rows, row)
 		}
@@ -256,6 +279,13 @@ func (db *DynamicParquetDB) saveLocked() error {
 
 	for _, r := range db.rows {
 		row := make(parquet.Row, len(colMap))
+		if idx, ok := colMap["id"]; ok {
+			idVal := r["id"]
+			if idVal == nil || idVal == "" {
+				idVal = uuid.NewString()
+			}
+			row[idx] = parquet.ValueOf(idVal).Level(0, 0, idx)
+		}
 		if idx, ok := colMap["image_path"]; ok {
 			row[idx] = parquet.ValueOf(r["image_path"]).Level(0, 0, idx)
 		}
