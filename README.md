@@ -1,6 +1,6 @@
 # 🎨 parq-vision
 
-![parq-vision Logo](logo.png)
+<img src="logo.png" alt="parq-vision Logo" width="400" />
 
 [![Go Version](https://img.shields.io/github/go-mod/go-version/mamorett/parq-vision)](https://github.com/mamorett/parq-vision)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
