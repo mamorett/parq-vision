@@ -5,8 +5,6 @@ import (
 	_ "embed"
 	"flag"
 	"fmt"
-	"image"
-	"image/color"
 	_ "image/png"
 	"os"
 	"os/signal"
@@ -17,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/blacktop/go-termimg"
 	"github.com/mamorett/parq-vision/internal/collector"
 	"github.com/mamorett/parq-vision/internal/config"
 	"github.com/mamorett/parq-vision/internal/parquet"
@@ -34,53 +33,11 @@ type result struct {
 var logoBytes []byte
 
 func printLogo() {
-	img, _, err := image.Decode(bytes.NewReader(logoBytes))
+	img, err := termimg.From(bytes.NewReader(logoBytes))
 	if err != nil {
 		return
 	}
-
-	bounds := img.Bounds()
-	srcW, srcH := bounds.Dx(), bounds.Dy()
-
-	targetW := 60
-	targetH := (targetW * srcH) / (srcW * 2)
-
-	for y := 0; y < targetH; y++ {
-		fmt.Print("  ")
-		for x := 0; x < targetW; x++ {
-			srcX1 := bounds.Min.X + (x*srcW)/targetW
-			srcY1 := bounds.Min.Y + ((2*y)*srcH)/(2*targetH)
-
-			srcX2 := bounds.Min.X + (x*srcW)/targetW
-			srcY2 := bounds.Min.Y + ((2*y+1)*srcH)/(2*targetH)
-
-			c1 := img.At(srcX1, srcY1)
-			c2 := img.At(srcX2, srcY2)
-
-			r1, g1, b1, a1 := rgba(c1)
-			r2, g2, b2, a2 := rgba(c2)
-
-			topColored := a1 >= 128
-			botColored := a2 >= 128
-
-			if !topColored && !botColored {
-				fmt.Print("\x1b[0m ")
-			} else if topColored && !botColored {
-				fmt.Fprintf(os.Stdout, "\x1b[0m\x1b[38;2;%d;%d;%dm▀", r1, g1, b1)
-			} else if !topColored && botColored {
-				fmt.Fprintf(os.Stdout, "\x1b[0m\x1b[38;2;%d;%d;%dm▄", r2, g2, b2)
-			} else {
-				fmt.Fprintf(os.Stdout, "\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm▄", r1, g1, b1, r2, g2, b2)
-			}
-		}
-		fmt.Println("\x1b[0m")
-	}
-	fmt.Println()
-}
-
-func rgba(c color.Color) (r, g, b, a uint32) {
-	r32, g32, b32, a32 := c.RGBA()
-	return r32 >> 8, g32 >> 8, b32 >> 8, a32 >> 8
+	_ = img.Width(50).Height(25).Print()
 }
 
 func main() {
@@ -102,7 +59,7 @@ func main() {
 
 	flag.Usage = func() {
 		printLogo()
-		fmt.Fprintf(os.Stderr, "\033[1;36mUsage of parq-vision:\033[0m\n\n")
+		fmt.Fprintf(os.Stderr, "\n\033[1;36mUsage of parq-vision:\033[0m\n\n")
 		fmt.Fprintf(os.Stderr, "\033[1mOptions:\033[0m\n")
 		fmt.Fprintf(os.Stderr, "  \033[36m-c, --config\033[0m \033[33m<path>\033[0m        Path to vision.json config file (\033[1;31mrequired\033[0m)\n")
 		fmt.Fprintf(os.Stderr, "  \033[36m-j, --concurrency\033[0m \033[33m<int>\033[0m     Number of parallel LLM workers (overrides config)\n")
