@@ -1,8 +1,13 @@
 package main
 
 import (
+	"bytes"
+	_ "embed"
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	_ "image/png"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -25,14 +30,57 @@ type result struct {
 	err       error
 }
 
-var rawAsciiArt = `  ____   _    ____   ___   __     _____ ____ ___ ___  _   _ 
- |  _ \ / \  |  _ \ / _ \  \ \   / /_ _/ ___|_ _/ _ \| \ | |
- | |_) / _ \ | |_) | | | |  \ \ / / | |\___ \| | | | |  \| |
- |  __/ ___ \|  _ <| |_| |   \ V /  | | ___) | | |_| | |\  |
- |_| /_/   \_\_| \_\\__\_\    \_/  |___|____/___\___/|_| \_|`
+//go:embed logo.png
+var logoBytes []byte
 
 func printLogo() {
-	fmt.Printf("\033[36m%s\033[0m\n\n", rawAsciiArt)
+	img, _, err := image.Decode(bytes.NewReader(logoBytes))
+	if err != nil {
+		return
+	}
+
+	bounds := img.Bounds()
+	srcW, srcH := bounds.Dx(), bounds.Dy()
+
+	targetW := 60
+	targetH := (targetW * srcH) / (srcW * 2)
+
+	for y := 0; y < targetH; y++ {
+		fmt.Print("  ")
+		for x := 0; x < targetW; x++ {
+			srcX1 := bounds.Min.X + (x*srcW)/targetW
+			srcY1 := bounds.Min.Y + ((2*y)*srcH)/(2*targetH)
+
+			srcX2 := bounds.Min.X + (x*srcW)/targetW
+			srcY2 := bounds.Min.Y + ((2*y+1)*srcH)/(2*targetH)
+
+			c1 := img.At(srcX1, srcY1)
+			c2 := img.At(srcX2, srcY2)
+
+			r1, g1, b1, a1 := rgba(c1)
+			r2, g2, b2, a2 := rgba(c2)
+
+			topColored := a1 >= 128
+			botColored := a2 >= 128
+
+			if !topColored && !botColored {
+				fmt.Print("\x1b[0m ")
+			} else if topColored && !botColored {
+				fmt.Fprintf(os.Stdout, "\x1b[0m\x1b[38;2;%d;%d;%dm▀", r1, g1, b1)
+			} else if !topColored && botColored {
+				fmt.Fprintf(os.Stdout, "\x1b[0m\x1b[38;2;%d;%d;%dm▄", r2, g2, b2)
+			} else {
+				fmt.Fprintf(os.Stdout, "\x1b[48;2;%d;%d;%dm\x1b[38;2;%d;%d;%dm▄", r1, g1, b1, r2, g2, b2)
+			}
+		}
+		fmt.Println("\x1b[0m")
+	}
+	fmt.Println()
+}
+
+func rgba(c color.Color) (r, g, b, a uint32) {
+	r32, g32, b32, a32 := c.RGBA()
+	return r32 >> 8, g32 >> 8, b32 >> 8, a32 >> 8
 }
 
 func main() {
