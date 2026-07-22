@@ -2,13 +2,18 @@ package main
 
 import (
 	"bytes"
+
+	"encoding/base64"
 	_ "embed"
 	"flag"
 	"fmt"
-	_ "image/png"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,12 +37,126 @@ type result struct {
 //go:embed logo.png
 var logoBytes []byte
 
+// detectBestProtocol determines the optimal terminal graphics protocol based on runtime OS and terminal detection.
+func detectBestProtocol() termimg.Protocol {
+	protocol := termimg.DetectProtocol()
+	if protocol != termimg.Unsupported {
+		return protocol
+	}
+
+	if termimg.KittySupported() {
+		return termimg.Kitty
+	}
+	if termimg.ITerm2Supported() {
+		return termimg.ITerm2
+	}
+	if termimg.SixelSupported() {
+		return termimg.Sixel
+	}
+
+	switch runtime.GOOS {
+	case "darwin":
+		if termimg.DetectITerm2FromEnvironment() {
+			return termimg.ITerm2
+		}
+		if termimg.DetectKittyFromEnvironment() {
+			return termimg.Kitty
+		}
+	case "linux":
+		if termimg.DetectKittyFromEnvironment() {
+			return termimg.Kitty
+		}
+		if termimg.DetectSixelFromEnvironment() {
+			return termimg.Sixel
+		}
+	}
+
+	return termimg.Halfblocks
+}
+
+func printITerm2PNG(img image.Image, cellsWidth, cellsHeight int) error {
+	bounds := img.Bounds()
+	targetW := uint(cellsWidth * 8)
+	targetH := uint(cellsHeight * 16)
+	if bounds.Dx() > 0 && bounds.Dy() > 0 {
+		ratio := float64(bounds.Dx()) / float64(bounds.Dy())
+		if float64(targetW)/float64(targetH) > ratio {
+			targetW = uint(float64(targetH) * ratio)
+		} else {
+			targetH = uint(float64(targetW) / ratio)
+		}
+	}
+
+	resized := termimg.FastResize(img, targetW, targetH)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, resized); err != nil {
+		return err
+	}
+
+	b64 := base64.StdEncoding.EncodeToString(buf.Bytes())
+	fmt.Printf("\x1b]1337;File=inline=1;width=%dc;height=%dc;preserveAspectRatio=1:%s\a\n", cellsWidth, cellsHeight, b64)
+	return nil
+}
+
+func printTransparentHalfblocks(img image.Image, width, height int) {
+	resized := termimg.FastResize(img, uint(width), uint(height*2))
+	bounds := resized.Bounds()
+
+	var sb strings.Builder
+
+	for y := bounds.Min.Y; y < bounds.Max.Y; y += 2 {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			topColor := resized.At(x, y)
+			var botColor color.Color = color.NRGBA{0, 0, 0, 0}
+			if y+1 < bounds.Max.Y {
+				botColor = resized.At(x, y+1)
+			}
+
+			tr, tg, tb, ta := topColor.RGBA()
+			br, bg, bb, ba := botColor.RGBA()
+
+			topOpaque := ta >= 32768
+			botOpaque := ba >= 32768
+
+			if !topOpaque && !botOpaque {
+				sb.WriteString("\x1b[0m ")
+			} else if topOpaque && !botOpaque {
+				sb.WriteString(fmt.Sprintf("\x1b[0;38;2;%d;%d;%dm▀", tr>>8, tg>>8, tb>>8))
+			} else if !topOpaque && botOpaque {
+				sb.WriteString(fmt.Sprintf("\x1b[0;38;2;%d;%d;%dm▄", br>>8, bg>>8, bb>>8))
+			} else {
+				sb.WriteString(fmt.Sprintf("\x1b[38;2;%d;%d;%d;48;2;%d;%d;%dm▀", tr>>8, tg>>8, tb>>8, br>>8, bg>>8, bb>>8))
+			}
+		}
+		sb.WriteString("\x1b[0m\n")
+	}
+
+	fmt.Print(sb.String())
+}
+
 func printLogo() {
-	img, err := termimg.From(bytes.NewReader(logoBytes))
+	protocol := detectBestProtocol()
+	srcImg, _, err := image.Decode(bytes.NewReader(logoBytes))
 	if err != nil {
 		return
 	}
-	_ = img.Width(50).Height(25).Print()
+
+	switch protocol {
+	case termimg.ITerm2:
+		if err := printITerm2PNG(srcImg, 50, 25); err == nil {
+			return
+		}
+	case termimg.Kitty:
+		img, err := termimg.From(bytes.NewReader(logoBytes))
+		if err == nil {
+			if err := img.Width(50).Height(25).Scale(termimg.ScaleFit).Protocol(termimg.Kitty).Print(); err == nil {
+				return
+			}
+		}
+	}
+
+	// Fallback for Halfblocks or other terminals, ensuring transparent pixels preserve terminal background
+	printTransparentHalfblocks(srcImg, 50, 25)
 }
 
 func main() {
