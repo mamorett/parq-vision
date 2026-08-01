@@ -3,7 +3,8 @@
     "base_url": "https://api.openai.com/v1",
     "api_key": "${OPENAI_API_KEY}",
     "model": "gpt-4o",
-    "concurrency": 5
+    "concurrency": 5,
+    "max_tokens": 1000
   },
   "prompt": "describe the image in detail",
   "images": {

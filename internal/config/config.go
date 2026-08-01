@@ -20,6 +20,7 @@ type LLMConfig struct {
 	APIKey      string `json:"api_key"`
 	Model       string `json:"model"`
 	Concurrency int    `json:"concurrency"`
+	MaxTokens   int    `json:"max_tokens"` // optional; max tokens for LLM responses (0 = API default)
 }
 
 type ImagesConfig struct {

@@ -23,16 +23,18 @@ import (
 )
 
 type VisionClient struct {
-	client *openai.Client
-	model  string
+	client    *openai.Client
+	model     string
+	maxTokens int
 }
 
 func NewVisionClient(cfg config.LLMConfig) *VisionClient {
 	c := openai.DefaultConfig(cfg.APIKey)
 	c.BaseURL = cfg.BaseURL
 	return &VisionClient{
-		client: openai.NewClientWithConfig(c),
-		model:  cfg.Model,
+		client:    openai.NewClientWithConfig(c),
+		model:     cfg.Model,
+		maxTokens: cfg.MaxTokens,
 	}
 }
 
@@ -88,6 +90,9 @@ func (c *VisionClient) DescribeImage(imagePath string, prompt string, maxPixels 
 				},
 			},
 		},
+	}
+	if c.maxTokens > 0 {
+		msg.MaxTokens = c.maxTokens
 	}
 
 	var resp openai.ChatCompletionResponse

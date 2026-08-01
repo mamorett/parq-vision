@@ -185,6 +185,8 @@ The prompt sent to the Vision LLM to guide caption generation.
 | `base_url` | string | OpenAI-compatible API base URL. Supports `${ENV_VAR}`. |
 | `api_key` | string | API key. Supports `${ENV_VAR}`. (Optional for some local endpoints). |
 | `model` | string | Model name (default: `"gpt-4o"`). |
+| `concurrency` | int | Number of parallel LLM workers (default: `1`). |
+| `max_tokens` | int | Maximum number of tokens in the LLM response (default: API default when omitted or `0`). |
 
 ### `images` (Mandatory)
 | Key | Type | Description |
